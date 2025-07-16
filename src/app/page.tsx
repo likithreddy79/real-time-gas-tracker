@@ -2,69 +2,38 @@
 
 import { useEffect } from 'react';
 import { useGasStore } from '@/store/useGasStore';
-import { ethereumWS, polygonWS, arbitrumWS } from '@/utils/rpc';
+import { ethereumWS } from '@/utils/rpc';
+import type { Block } from 'ethers';
 
 export default function Home() {
-  const {
-    selectedChain,
-    setSelectedChain,
-    setGasData,
-    chains
-  } = useGasStore();
+  const setGasData = useGasStore((state) => state.setGasData);
+  const chains = useGasStore((state) => state.chains);
 
   useEffect(() => {
-    const providerMap = {
-      ethereum: ethereumWS,
-      polygon: polygonWS,
-      arbitrum: arbitrumWS,
-    };
-
-    const provider = providerMap[selectedChain];
-
-    const fetch = async () => {
+    const interval = setInterval(async () => {
       try {
-        const block = await provider.getBlock('latest');
-        if (block && block.baseFeePerGas) {
-          setGasData(selectedChain, {
-            timestamp: block.timestamp,
-            baseFee: Number(block.baseFeePerGas.toString()) / 1e9,
-            priorityFee: 2
-          });
-        }
-      } catch (e) {
-        console.log('error getting block', e);
+        const block = await ethereumWS.getBlock('latest') as Block;
+        if (!block || !block.baseFeePerGas) return;
+
+        setGasData('ethereum', {
+          timestamp: block.timestamp,
+          baseFee: Number(block.baseFeePerGas.toString()) / 1e9,
+          priorityFee: 2,
+        });
+      } catch (error) {
+        console.error('Error fetching block:', error);
       }
-    };
+    }, 6000);
 
-    const interval = setInterval(fetch, 6000);
-    return () => {
-      clearInterval(interval);
-      provider.destroy();
-    };
-  }, [selectedChain]);
-
-  const gas = chains[selectedChain];
+    return () => clearInterval(interval);
+  }, [setGasData]); // ✅ now correct
 
   return (
     <main className="p-6">
-      <h1 className="text-xl font-bold">Gas Tracker</h1>
-
+      <h1 className="text-xl font-bold">Ethereum Gas Tracker</h1>
       <div className="mt-4">
-        <label>Select Chain: </label>
-        <select
-          className="p-2 border rounded"
-          value={selectedChain}
-          onChange={(e) => setSelectedChain(e.target.value as any)}
-        >
-          <option value="ethereum">Ethereum</option>
-          <option value="polygon">Polygon</option>
-          <option value="arbitrum">Arbitrum</option>
-        </select>
-      </div>
-
-      <div className="mt-4">
-        <p>Base Fee: {gas.baseFee} Gwei</p>
-        <p>Priority Fee: {gas.priorityFee} Gwei</p>
+        <p>Base Fee: {chains.ethereum.baseFee} Gwei</p>
+        <p>Priority Fee: {chains.ethereum.priorityFee} Gwei</p>
       </div>
     </main>
   );
